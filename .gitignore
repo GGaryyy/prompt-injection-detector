@@ -1,0 +1,80 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual env
+.venv/
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Project-specific (keep dirs via .gitkeep)
+data/raw/*
+data/processed/*
+data/embeddings/*
+output/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/embeddings/.gitkeep
+!output/.gitkeep
+
+# Model & embedding caches
+*.npy
+*.pkl
+*.bin
+*.safetensors
+.cache/
+
+# Secrets
+.env
+.env.local
+.env.*.local
+secrets/
+*.pem
+*.key
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Coverage / test artifacts
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini

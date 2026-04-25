@@ -1,0 +1,38 @@
+# Docker Compose for PI Detector dev workflow
+#
+# Usage:
+#   docker compose build                                       # one-time / after dep change
+#   docker compose run --rm app bash scripts/download_data.sh  # download datasets
+#   docker compose run --rm app python scripts/build_dataset.py
+#   docker compose run --rm app python scripts/train.py
+#   docker compose run --rm app pytest
+#   docker compose up api                                      # serve API on :8000
+#   docker compose down                                        # stop services
+
+x-base-app: &base-app
+  build: .
+  image: pi-detector:dev
+  volumes:
+    - .:/app                                # bind mount source (live edit)
+    - hf_cache:/root/.cache/huggingface     # persist downloaded models
+    - pip_cache:/root/.cache/pip            # persist pip cache
+  working_dir: /app
+  environment:
+    - PYTHONPATH=/app
+    - HF_HOME=/root/.cache/huggingface
+    - TRANSFORMERS_CACHE=/root/.cache/huggingface/hub
+    - TOKENIZERS_PARALLELISM=false
+
+services:
+  app:
+    <<: *base-app
+
+  api:
+    <<: *base-app
+    ports:
+      - "8000:8000"
+    command: ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+volumes:
+  hf_cache:
+  pip_cache:
