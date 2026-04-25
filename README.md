@@ -25,7 +25,7 @@ Per-attack-family recall on test set:
 | adversarial_suffix | 99 | 0.990 |
 | persona_override | 28 | 0.929 |
 
-> 註:小樣本家族(narrative_framing / completion_smuggling / trust_partitioning 等,各 1 條 test sample)受統計力限制,留 v1.1 增補。
+> Note: Small-sample families (narrative_framing / completion_smuggling / trust_partitioning etc., 1 test sample each) have very low statistical power. v1.1 will add more training samples per family.
 
 ## Quickstart (Docker)
 
