@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — v1.0 LLM Guard Gateway (in progress)
+
+Upgrade from a single `/detect` API (LLM01 only) to an offline reverse-proxy
+gateway covering the runtime-defensible OWASP LLM Top 10 (2025) categories.
+See `docs/plans/plan_llm_guard_gateway.md` (meta-repo) and `docs/owasp_coverage.md`.
+
+### Added
+- `src/schema.py` — gateway schemas: `Direction`, `GuardDecision`, `GuardVerdict`, `GatewayDecision`, `AttackRecord`, `GapRecord`, `DECISION_SEVERITY`
+- `src/guards/base.py` — `Guard` ABC, `GuardContext`, guard registry (`register_guard` / `registry`)
+- `src/config.py` — `config.yaml` loader (`GatewayConfig` / `GuardConfig` / `RateLimitConfig` / `AuditConfig`), env overrides
+- `src/owasp_gaps.py` — declared runtime gaps (LLM03 / LLM04 / LLM08) with recommended controls
+- `config.yaml` — gateway config template (upstream, port 33707, mode, fail-mode, per-guard toggles)
+- `docs/owasp_coverage.md` — OWASP LLM Top 10 (2025) coverage + honest gap declaration
+- `src/guards/` — seven OWASP guards (LLM01/02/05/06/07/09/10) + mirrored unit tests (108 tests)
+- `src/pipeline.py` — guard orchestration, per-guard failure isolation, circuit breaker, severity aggregation, mode handling
+- `src/audit.py` — attack log to JSONL + SQLite (`attacks` + `gaps` tables)
+- `src/textio.py` — request/response text extraction + redaction injection (OpenAI/Anthropic/bare shapes)
+- `src/gateway.py` + `main.py` — reverse-proxy app: inbound/outbound guard pipelines, fail-closed posture, `/_guard/health|ready|owasp`
+- `Dockerfile` / `docker-compose.yml` — `gateway` service on 33707 (default `python main.py`)
+- `docs/usage/USAGE.md` — full deployment + configuration guide
+- `docs/reports/{test,security,code_review}_2026-06-10.md` — sprint reports
+- `tests/integration/test_gateway.py`, `tests/unit/test_{pipeline,audit,textio}.py`
+
+### Changed
+- `pyproject.toml` — added runtime deps `httpx`, `pyyaml`
+- `src/guards/__init__.py` — imports all guard modules so the registry is always fully populated
+- `tests/conftest.py` — numpy import made lazy (light-venv collection fix)
+
+- `tests/stress/test_gateway_stress.py` — proxy throughput / concurrency / oversize-body stress tests
+
+### Security
+- bandit SAST clean (0/0/0) after annotating detection-pattern false positives (`# nosec B105`) and the intentional container bind (`# nosec B104`)
+- detect-secrets clean (private-key *pattern* allowlisted with `# pragma: allowlist secret`)
+- pip-audit ✅ pass on freshly rebuilt Docker image
+
+### Validation
+- **Docker (real ML, fresh image): 200 passed / 0 failed** — unit + integration + stress + security (incl. pip-audit).
+- Light venv: 173 pass (pure-logic guards + proxy). Stress: ~518 rps, p95 2.4 ms proxy overhead.
+- Docker reached from WSL via `docker.exe` (auto-translates `/mnt/d`→`D:\`). See `docs/issues/ISSUE_001.md`.
+
 ## [0.1.0] - 2026-04-25 — MVP
 
 First working release. Three-layer ensemble PI detector trained on 6732 samples

@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
-import numpy as np
+from typing import TYPE_CHECKING
+
 import pytest
 
 from src.schema import TrainingSample
+
+if TYPE_CHECKING:
+    import numpy as np
 
 
 @pytest.fixture
@@ -58,8 +62,10 @@ def small_dataset(benign_prompts, injection_prompts) -> list[TrainingSample]:
 
 
 @pytest.fixture
-def random_embeddings(small_dataset) -> np.ndarray:
+def random_embeddings(small_dataset) -> "np.ndarray":
     """Deterministic random embeddings for testing classifier without real model."""
+    import numpy as np
+
     rng = np.random.default_rng(42)
     n = len(small_dataset)
     dim = 128

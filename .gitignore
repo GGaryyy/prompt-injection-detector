@@ -78,3 +78,6 @@ coverage.xml
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# local dev venv (no Docker available in this shell)
+.venv-dev/

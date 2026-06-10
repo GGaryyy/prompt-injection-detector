@@ -33,6 +33,23 @@ services:
       - "8000:8000"
     command: ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
+  # LLM Guard Gateway — reverse proxy in front of your AI service.
+  # Set GUARD_UPSTREAM_URL to your service; clients then hit the gateway on 33707.
+  gateway:
+    <<: *base-app
+    ports:
+      - "33707:33707"
+    environment:
+      - PYTHONPATH=/app
+      - HF_HOME=/root/.cache/huggingface
+      - TRANSFORMERS_CACHE=/root/.cache/huggingface/hub
+      - TOKENIZERS_PARALLELISM=false
+      - GUARD_CONFIG=/app/config.yaml
+      # - GUARD_UPSTREAM_URL=http://host.docker.internal:8000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["python", "main.py"]
+
 volumes:
   hf_cache:
   pip_cache:

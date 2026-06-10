@@ -1,0 +1,76 @@
+# LLM Guard Gateway — configuration template
+#
+# Reverse-proxy that sits in front of any AI service. Offline-first: the only
+# outbound network call is forwarding to `upstream_url`.
+#
+# Override at runtime with env: GUARD_CONFIG (path), GUARD_UPSTREAM_URL,
+# GUARD_LISTEN_PORT, GUARD_MODE.
+
+# Where to forward traffic after inbound guards pass.
+upstream_url: "http://host.docker.internal:8000"
+
+listen_host: "0.0.0.0"
+listen_port: 33707          # uncommon port; avoids 8000/8080/8443 collisions
+
+# block   — reject requests/responses that trip a guard (default; fail-closed posture)
+# monitor — log only, never block (shadow mode for threshold tuning)
+# redact  — block inbound attacks, redact outbound leaks instead of blocking
+mode: "block"
+
+# Gateway-wide fallback fail mode if a guard errors and has no own setting.
+# closed = treat guard error as BLOCK (no silent bypass).
+fail_mode: "closed"
+
+upstream_timeout_s: 60.0
+max_body_bytes: 1000000
+
+# Extract the text to inspect from request/response JSON bodies.
+# "auto" handles common OpenAI/Anthropic chat shapes; or give a dotted path.
+request_text_field: "auto"
+response_text_field: "auto"
+
+# LLM10 — Unbounded Consumption
+rate_limit:
+  enabled: true
+  requests_per_minute: 120
+  max_concurrent: 64
+  max_input_chars: 20000
+
+audit:
+  jsonl_path: "output/attacks.jsonl"
+  sqlite_path: "output/attacks.db"
+  payload_excerpt_chars: 500
+
+# Per-guard settings. guard_id -> config. Omitted guards use defaults (enabled).
+guards:
+  llm01_injection:
+    enabled: true
+    threshold: 0.5
+    fail_mode: "closed"
+
+  llm02_secret:
+    enabled: true
+    fail_mode: "closed"
+    options:
+      redact_on_match: true       # in redact mode, mask instead of block
+
+  llm05_output:
+    enabled: true
+    fail_mode: "closed"
+
+  llm06_agency:
+    enabled: true
+    fail_mode: "closed"
+    options:
+      tool_allowlist: []          # empty = flag all tool/function calls
+
+  llm07_sysprompt:
+    enabled: true
+    fail_mode: "closed"
+    options:
+      canary_tokens: []           # inject + watch for these in responses
+      system_prompt_fragments: [] # known secret fragments to watch for echo
+
+  llm09_misinfo:
+    enabled: false                # offline fact-check not possible; off by default
+    fail_mode: "open"

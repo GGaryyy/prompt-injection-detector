@@ -25,8 +25,12 @@ RUN pip install --upgrade pip setuptools wheel \
 COPY src/ ./src/
 COPY scripts/ ./scripts/
 COPY tests/ ./tests/
+COPY main.py config.yaml ./
 
+# Gateway listens on an uncommon port (overridable via config.yaml / GUARD_LISTEN_PORT).
+EXPOSE 33707
 EXPOSE 8000
 
-# Default command: serve the API. Override with `docker compose run` for one-shot tasks.
-CMD ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]
+# Default command: run the LLM Guard Gateway (reads config.yaml for host/port).
+# Override with `docker compose run` for one-shot tasks, or the `api` service for the bare detector.
+CMD ["python", "main.py"]

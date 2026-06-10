@@ -6,6 +6,7 @@ Defines:
 - AttackFamily: enum of attack family labels (aligned with 03_owasp_llm_top10_crosswalk.md)
 """
 
+from enum import Enum
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
@@ -99,3 +100,81 @@ class DetectRequest(BaseModel):
 
     text: str = Field(..., min_length=1, max_length=10_000)
     return_top_k: int = Field(default=5, ge=0, le=20)
+
+
+# ============================================================================
+# Gateway / Guard schemas (v1.0 — LLM Guard Gateway)
+# ============================================================================
+
+
+class Direction(str, Enum):
+    INBOUND = "inbound"
+    OUTBOUND = "outbound"
+
+
+class GuardDecision(str, Enum):
+    PASS = "pass"
+    FLAG = "flag"      # suspicious, recorded, not blocked
+    REDACT = "redact"  # content modified, allowed through
+    BLOCK = "block"
+    ERROR = "error"    # guard failed to run
+
+
+# Severity ordering for aggregating multiple guard verdicts into one decision.
+DECISION_SEVERITY = {
+    GuardDecision.PASS: 0,
+    GuardDecision.FLAG: 1,
+    GuardDecision.REDACT: 2,
+    GuardDecision.ERROR: 3,
+    GuardDecision.BLOCK: 4,
+}
+
+
+class GuardVerdict(BaseModel):
+    """One guard's verdict on one direction of one request."""
+
+    guard_id: str
+    owasp_id: str  # e.g. "LLM01"
+    direction: Direction
+    decision: GuardDecision
+    score: float = Field(default=0.0, ge=0.0, le=1.0)
+    reasons: list[str] = Field(default_factory=list)
+    redacted_text: Optional[str] = None
+    detail: dict = Field(default_factory=dict)
+    latency_ms: float = Field(default=0.0, ge=0.0)
+
+
+class GatewayDecision(BaseModel):
+    """Aggregated decision across all guards for one direction."""
+
+    request_id: str
+    direction: Direction
+    final_decision: GuardDecision
+    verdicts: list[GuardVerdict] = Field(default_factory=list)
+    blocked_by: Optional[str] = None  # guard_id that forced the block
+    redacted_text: Optional[str] = None
+
+
+class AttackRecord(BaseModel):
+    """One audit-log entry for a flagged/blocked/redacted request."""
+
+    request_id: str
+    timestamp: str  # ISO-8601, stamped at write time
+    direction: Direction
+    owasp_id: str
+    guard_id: str
+    decision: GuardDecision
+    score: float = Field(default=0.0, ge=0.0, le=1.0)
+    client_ip: Optional[str] = None
+    session_id: Optional[str] = None
+    reasons: list[str] = Field(default_factory=list)
+    payload_excerpt: str = ""  # truncated + sanitized
+
+
+class GapRecord(BaseModel):
+    """An OWASP category the gateway cannot defend at runtime — logged for transparency."""
+
+    owasp_id: str
+    name: str
+    reason: str
+    recommended_control: str

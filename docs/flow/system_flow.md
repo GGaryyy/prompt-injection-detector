@@ -69,6 +69,33 @@ sequenceDiagram
     API-->>Client: DetectionResult JSON
 ```
 
+## v1.0 — LLM Guard Gateway(反向代理防禦層)
+
+v0.1.0 的 `/detect` API 升級為一個獨立、離線的反向代理,擋在任意 AI 服務前。
+
+```mermaid
+flowchart LR
+    C[Client] -->|request| GW[LLM Guard Gateway :33707]
+    GW -->|inbound guards| IN{block?}
+    IN -->|yes| R1[403 + audit]
+    IN -->|no| UP[Upstream AI service]
+    UP -->|response| OG[outbound guards]
+    OG -->|block| R2[403 + audit]
+    OG -->|redact| RD[masked body + audit]
+    OG -->|pass| C
+    GW -.->|attacks| LOG[(attacks.jsonl + sqlite)]
+```
+
+- **inbound guards**:llm01_injection、llm10_consumption、llm06_agency
+- **outbound guards**:llm02_secret、llm07_sysprompt、llm05_output、(llm09_misinfo, off)
+- **編排**:`pipeline.py` 逐 guard 隔離執行 → 依 severity 聚合 → 套用 mode(block/monitor/redact)
+- **決策失敗隔離**:單一 guard 例外只跳過該 guard;fail_mode closed → 視為 BLOCK;連續錯誤 → circuit breaker
+- **攻擊記錄**:`audit.py` 寫 JSONL + SQLite(供 Phase 2 AutoTest dashboard 讀)
+- **覆蓋宣告**:見 [`../owasp_coverage.md`](../owasp_coverage.md);LLM03/04/08 為登記之 runtime gap
+
+元件:`src/gateway.py`(代理)、`src/pipeline.py`(編排)、`src/audit.py`(記錄)、
+`src/textio.py`(body 文字抽取)、`src/guards/*`(7 guards)、`src/config.py` + `config.yaml`。
+
 ## 後續迭代(v1.5+)
 
 (待 v1 完成後填入)
