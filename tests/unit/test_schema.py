@@ -24,7 +24,7 @@ class TestTrainingSample:
         s = TrainingSample(id="x1", prompt="hi", label=0, source="t")
         assert s.label == 0
         assert s.attack_family is None
-        assert s.gary_personally_tested is False
+        assert s.author_validated is False
         assert s.tested_against == []
 
     def test_invalid_label(self) -> None:
@@ -52,8 +52,8 @@ class TestTrainingSample:
             label=1,
             source="gandalf",
             attack_family="trust_partitioning",
-            gary_personally_tested=True,
-            gary_test_context="L6",
+            author_validated=True,
+            validation_context="L6",
         )
         j = s.model_dump_json()
         s2 = TrainingSample.model_validate_json(j)

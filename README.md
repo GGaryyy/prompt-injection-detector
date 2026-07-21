@@ -42,7 +42,7 @@ docker compose run --rm app python scripts/build_dataset.py
 # 4. Train + benchmark
 docker compose run --rm app python scripts/train.py
 
-# 5. Run tests (58 tests)
+# 5. Run tests (full suite)
 docker compose run --rm app pytest
 
 # 6. Serve API on http://localhost:8000
@@ -96,7 +96,7 @@ The detector targets 22 attack families from the OWASP LLM Top 10 (2025) taxonom
 - **A. Author-validated** (12 families) — hand-crafted from real attack experience on Lakera Gandalf 6/8 levels (see `src/data_loader.py:GANDALF_PROMPTS`)
 - **B. Public-data coverage** — Direct Instruction Override (Lakera), Adversarial Suffix (AdvBench), Persona Override / DAN (JailbreakBench)
 
-Coverage matrix and rationale: see plan in the parent project ([`docs/plans/plan_prompt_injection_detector.md`](../../docs/plans/plan_prompt_injection_detector.md) § 4 — currently relative to the meta-project structure).
+Coverage matrix and rationale: see [`docs/OVERVIEW.md`](docs/OVERVIEW.md).
 
 ## Known Limitations
 
@@ -124,8 +124,9 @@ prompt-injection-detector/
 │   ├── build_dataset.py       # Consolidate to unified JSONL
 │   └── train.py               # Train + benchmark + save artifacts
 ├── tests/
-│   ├── unit/                  # 39 tests
-│   ├── integration/           # 16 tests
+│   ├── unit/                  # 165 tests
+│   ├── integration/           # 18 tests
+│   ├── stress/                # 3 tests
 │   └── security/              # 3 tests (pip-audit / bandit / detect-secrets)
 ├── docs/
 │   ├── flow/system_flow.md

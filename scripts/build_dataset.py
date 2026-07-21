@@ -38,12 +38,12 @@ def main() -> None:
 
     n_pos = sum(1 for s in samples if s.label == 1)
     n_neg = sum(1 for s in samples if s.label == 0)
-    n_gary = sum(1 for s in samples if s.gary_personally_tested)
+    n_author_validated = sum(1 for s in samples if s.author_validated)
 
     logger.info(f"Wrote {len(samples)} samples to {out}")
     logger.info(f"  positive (injection): {n_pos}")
     logger.info(f"  negative (benign):    {n_neg}")
-    logger.info(f"  gary-personally-tested: {n_gary}")
+    logger.info(f"  author-validated: {n_author_validated}")
 
     # Per-source breakdown
     from collections import Counter

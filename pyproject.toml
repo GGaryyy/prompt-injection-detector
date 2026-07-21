@@ -5,7 +5,7 @@ description = "Embedding-based detector for prompt injection attacks against LLM
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
-    { name = "Gary" },
+    { name = "Chuan Peng" },
 ]
 dependencies = [
     "sentence-transformers>=2.5.0",

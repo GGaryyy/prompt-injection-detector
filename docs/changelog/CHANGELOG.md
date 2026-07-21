@@ -11,6 +11,13 @@ Upgrade from a single `/detect` API (LLM01 only) to an offline reverse-proxy
 gateway covering the runtime-defensible OWASP LLM Top 10 (2025) categories.
 See `docs/plans/plan_llm_guard_gateway.md` (meta-repo) and `docs/owasp_coverage.md`.
 
+### Changed
+- Public-release prep: renamed `TrainingSample.gary_personally_tested` → `author_validated`
+  and `gary_test_context` → `validation_context` across `src/`, `scripts/`, and tests;
+  set project attribution to Chuan Peng (LICENSE, `pyproject.toml`)
+- `docs/OVERVIEW.md` added — canonical scope, architecture, and OWASP coverage reference;
+  replaced two dangling links to the private meta-repo plan with in-repo references
+
 ### Added
 - `src/schema.py` — gateway schemas: `Direction`, `GuardDecision`, `GuardVerdict`, `GatewayDecision`, `AttackRecord`, `GapRecord`, `DECISION_SEVERITY`
 - `src/guards/base.py` — `Guard` ABC, `GuardContext`, guard registry (`register_guard` / `registry`)
@@ -53,7 +60,7 @@ from 4 public datasets + 12 hand-crafted Gandalf prompts.
 ### Added
 - `src/rule_engine.py` — 6-category keyword + regex layer (instruction override, role reshaping, meta reference, delimiter forgery, exfiltration, unusual structure)
 - `src/embedder.py` — `nomic-ai/nomic-embed-text-v1.5` wrapper with `all-MiniLM-L6-v2` fallback
-- `src/data_loader.py` — Loaders for Lakera / AdvBench / JailbreakBench / Databricks Dolly + 12 hand-crafted Gandalf attack prompts (`gary_personally_tested=True`)
+- `src/data_loader.py` — Loaders for Lakera / AdvBench / JailbreakBench / Databricks Dolly + 12 hand-crafted Gandalf attack prompts (`author_validated=True`)
 - `src/classifier.py` — `LogisticRegression` / `RandomForest` wrapper with save/load
 - `src/detector.py` — Three-layer ensemble (rule + classifier + similarity), explainability, latency tracking
 - `src/api.py` — FastAPI service with `/health` + `/detect` (lazy-load artifacts)

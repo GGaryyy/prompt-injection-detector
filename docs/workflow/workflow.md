@@ -99,7 +99,7 @@ detect-secrets scan
 
 ## Sprint 詳細步驟
 
-見 [`../../../docs/plans/plan_prompt_injection_detector.md`](../../../docs/plans/plan_prompt_injection_detector.md) § 5「實作步驟」
+見 [`../OVERVIEW.md`](../OVERVIEW.md)「Scope & design rationale」一節。
 
 ## v1.0 開發環境補充(WSL2,無 Docker/系統 pip)
 

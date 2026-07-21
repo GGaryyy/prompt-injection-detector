@@ -1,7 +1,7 @@
 """Unified data schemas for the PI detector.
 
 Defines:
-- TrainingSample: unified format for any data source (Lakera, JailbreakBench, ShareGPT, Gary's Gandalf prompts)
+- TrainingSample: unified format for any data source (Lakera, JailbreakBench, ShareGPT, the author's Gandalf prompts)
 - DetectionResult: API response schema
 - AttackFamily: enum of attack family labels (aligned with 03_owasp_llm_top10_crosswalk.md)
 """
@@ -13,9 +13,9 @@ from pydantic import BaseModel, Field
 
 
 # Aligned with crosswalk file's attack family taxonomy.
-# Tested-by-Gary families come first (handled by hands-on tuning); rest are training-only coverage.
+# Author-validated families come first (handled by hands-on tuning); rest are training-only coverage.
 AttackFamily = Literal[
-    # === Tested by Gary in Gandalf ===
+    # === Author-validated (Gandalf) ===
     "pretexting",
     "semantic_indirection",
     "hint_extraction",
@@ -62,13 +62,13 @@ class TrainingSample(BaseModel):
         default_factory=list,
         description="LLMs this attack was reported against (e.g. ['GPT-4', 'Claude-3'])",
     )
-    gary_personally_tested: bool = Field(
+    author_validated: bool = Field(
         default=False,
-        description="True if Gary tested this attack hands-on (e.g., during Gandalf)",
+        description="True if the author validated this attack hands-on (e.g., during Gandalf)",
     )
-    gary_test_context: Optional[str] = Field(
+    validation_context: Optional[str] = Field(
         default=None,
-        description="If gary_personally_tested, where (e.g. 'Gandalf L2', 'Gandalf L7 attempt 4')",
+        description="If author_validated, where (e.g. 'Gandalf L2', 'Gandalf L7 attempt 4')",
     )
     notes: str = Field(default="")
 

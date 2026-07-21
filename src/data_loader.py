@@ -204,7 +204,7 @@ def load_wildjailbreak(
     return samples
 
 
-# === Manual loader for Gary's Gandalf write-up prompts ===
+# === Manual loader for the author's Gandalf write-up prompts ===
 
 
 GANDALF_PROMPTS: list[dict] = [
@@ -301,9 +301,9 @@ GANDALF_PROMPTS: list[dict] = [
 
 
 def load_gandalf_handcrafted() -> list[TrainingSample]:
-    """Gary's hand-crafted attack prompts from Gandalf write-up.
+    """The author's hand-crafted attack prompts from Gandalf write-up.
 
-    Marked with `gary_personally_tested=True` — these get treated as gold-quality
+    Marked with `author_validated=True` — these get treated as gold-quality
     in stratified evaluation.
     """
     samples: list[TrainingSample] = []
@@ -316,8 +316,8 @@ def load_gandalf_handcrafted() -> list[TrainingSample]:
                 source="gandalf_writeup_handcrafted",
                 attack_family=p["attack_family"],  # type: ignore[arg-type]
                 language=p["language"],
-                gary_personally_tested=True,
-                gary_test_context=p["context"],
+                author_validated=True,
+                validation_context=p["context"],
             )
         )
     logger.info(f"Gandalf handcrafted: {len(samples)} samples")

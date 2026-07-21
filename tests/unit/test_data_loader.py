@@ -20,8 +20,8 @@ def test_gandalf_handcrafted_returns_samples() -> None:
     samples = load_gandalf_handcrafted()
     assert len(samples) == len(GANDALF_PROMPTS)
     assert all(s.label == 1 for s in samples)
-    assert all(s.gary_personally_tested for s in samples)
-    assert all(s.gary_test_context for s in samples)
+    assert all(s.author_validated for s in samples)
+    assert all(s.validation_context for s in samples)
     assert all(s.attack_family for s in samples)
 
 

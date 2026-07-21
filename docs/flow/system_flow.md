@@ -39,7 +39,7 @@ flowchart TB
         AdvBench[AdvBench CSV]
         Wild[WildJailbreak]
         Share[ShareGPT - negative]
-        Gandalf[Gary's Gandalf prompts<br/>JSON]
+        Gandalf[Author's Gandalf prompts<br/>JSON]
     end
 
     Sources --> Loader[data_loader.py<br/>統一 → TrainingSample schema]
