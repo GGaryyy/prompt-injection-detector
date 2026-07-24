@@ -37,8 +37,8 @@ flowchart TB
         Lakera[Lakera HF dataset]
         JBB[JailbreakBench]
         AdvBench[AdvBench CSV]
-        Wild[WildJailbreak]
-        Share[ShareGPT - negative]
+        Wild[WildJailbreak<br/>optional]
+        Dolly[databricks-dolly-15k<br/>benign negative]
         Gandalf[Author's Gandalf prompts<br/>JSON]
     end
 
