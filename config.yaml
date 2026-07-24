@@ -17,10 +17,6 @@ listen_port: 33707          # uncommon port; avoids 8000/8080/8443 collisions
 # redact  — block inbound attacks, redact outbound leaks instead of blocking
 mode: "block"
 
-# Gateway-wide fallback fail mode if a guard errors and has no own setting.
-# closed = treat guard error as BLOCK (no silent bypass).
-fail_mode: "closed"
-
 upstream_timeout_s: 60.0
 max_body_bytes: 1000000
 

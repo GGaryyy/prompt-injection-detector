@@ -1,5 +1,7 @@
 # Project Overview — Prompt Injection Detector & LLM Guard Gateway
 
+> Language: **English** · [繁體中文](OVERVIEW.zh.md)
+
 This document explains what the project is, what it deliberately does and does not
 cover, how it is built, and the reasoning behind the main design choices. It is the
 canonical reference for the project's scope.
@@ -170,7 +172,9 @@ overridden by `GUARD_*` environment variables.
   dependency and a new data-exfiltration path. Detection runs locally so the tool can sit
   in front of sensitive services without widening the trust boundary.
 - **Fail-closed.** A security control that fails open is worse than none, because it
-  creates false confidence. A guard error is treated as a block by default.
+  creates false confidence. A guard error is treated as a block by default, and the
+  per-guard circuit breaker only suspends calls to a persistently failing guard — it
+  keeps enforcing that guard's fail mode, so a broken fail-closed guard never opens the gate.
 - **Reverse proxy, not a library.** The upstream service needs no code change, which makes
   the gateway deployable in front of existing systems.
 - **Explicit gaps over silent coverage.** The three runtime-undetectable OWASP categories

@@ -42,6 +42,24 @@ See `docs/plans/plan_llm_guard_gateway.md` (meta-repo) and `docs/owasp_coverage.
 
 - `tests/stress/test_gateway_stress.py` — proxy throughput / concurrency / oversize-body stress tests
 
+### Fixed
+- Circuit breaker no longer opens a fail-closed guard. A tripped guard's `check()`
+  calls are suspended, but its `fail_mode` is still enforced on every request
+  (fail-closed → keep BLOCKing, fail-open → PASS). Previously a guard that errored
+  past the threshold was skipped entirely, silently letting its traffic through —
+  directly contradicting the fail-closed posture. `src/pipeline.py`; regression tests
+  added in `tests/unit/test_pipeline.py`.
+- `/_guard/health` now reports `tripped_guards`, so guard degradation is observable
+  instead of silent. `src/gateway.py`.
+- **Audit format note:** guard-failure/tripped `reasons` strings are now ordered
+  reason-first — `"guard error: RuntimeError (fail-closed)"` / `"circuit tripped
+  (fail-closed)"`. External dashboards string-matching the previous
+  `"guard error (fail-closed): ..."` shape should update their match.
+
+### Removed
+- Dead `GatewayConfig.fail_mode` (gateway-wide fail mode was loaded but never read;
+  per-guard `fail_mode` is the single source of truth). `src/config.py`, `config.yaml`.
+
 ### Security
 - bandit SAST clean (0/0/0) after annotating detection-pattern false positives (`# nosec B105`) and the intentional container bind (`# nosec B104`)
 - detect-secrets clean (private-key *pattern* allowlisted with `# pragma: allowlist secret`)

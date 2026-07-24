@@ -115,7 +115,9 @@ def test_inbound_oversize_blocked(tmp_path):
 def test_management_endpoints(tmp_path):
     app, tc = _client(_config(tmp_path))
     try:
-        assert tc.get("/_guard/health").json() == {"status": "ok"}
+        health = tc.get("/_guard/health").json()
+        assert health["status"] == "ok"
+        assert health["tripped_guards"] == []
         assert tc.get("/_guard/ready").status_code == 200
         owasp = tc.get("/_guard/owasp").json()
         gap_ids = {g["owasp_id"] for g in owasp["runtime_gaps"]}

@@ -68,8 +68,13 @@ def create_app(config: GatewayConfig | None = None) -> FastAPI:
     app = FastAPI(title="LLM Guard Gateway", version="1.0.0", lifespan=lifespan)
 
     @app.get(MGMT_PREFIX + "/health")
-    async def health() -> dict:
-        return {"status": "ok"}
+    async def health(request: Request) -> dict:
+        # Liveness stays "ok" while the process is up; tripped guards are surfaced
+        # for observability without flipping the health contract (a tripped fail-closed
+        # guard is still enforcing, so the gateway is degraded, not dead).
+        gw: GatewayState | None = getattr(request.app.state, "gw", None)
+        tripped = gw.pipeline.tripped_guards() if gw else []
+        return {"status": "ok", "tripped_guards": tripped}
 
     @app.get(MGMT_PREFIX + "/ready")
     async def ready(request: Request) -> JSONResponse:

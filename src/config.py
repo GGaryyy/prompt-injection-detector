@@ -51,7 +51,6 @@ class GatewayConfig(BaseModel):
     listen_host: str = "0.0.0.0"  # nosec B104 — gateway binds all interfaces inside its container; host networking controls exposure
     listen_port: int = DEFAULT_PORT
     mode: GatewayMode = "block"
-    fail_mode: FailMode = "closed"
     upstream_timeout_s: float = DEFAULT_UPSTREAM_TIMEOUT_S
     max_body_bytes: int = DEFAULT_MAX_BODY_BYTES
 

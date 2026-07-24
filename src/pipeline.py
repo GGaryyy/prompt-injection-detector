@@ -2,8 +2,10 @@
 
 Failure isolation is the core safety property here: one guard raising must never
 take down the gateway. Each guard runs inside a try/except; on error the verdict
-follows that guard's fail_mode (closed -> BLOCK, open -> PASS), and a per-guard
-circuit breaker disables a guard that errors repeatedly (switching it to monitor).
+follows that guard's fail_mode (closed -> BLOCK, open -> PASS). A per-guard circuit
+breaker suspends check() calls for a guard that errors repeatedly — but the guard's
+fail_mode is still enforced on every request while tripped (a fail-closed guard keeps
+blocking). The breaker saves compute; it never opens the gate.
 """
 
 from __future__ import annotations
@@ -75,9 +77,16 @@ class GuardPipeline:
         verdicts: list[GuardVerdict] = []
         for guard in self._guards[direction]:
             if guard.guard_id in self._tripped:
-                continue
-            verdicts.append(self._run_one(guard, ctx))
+                # Breaker suspends check() calls, but fail_mode is still enforced:
+                # a tripped fail-closed guard keeps BLOCKing — it never opens the gate.
+                verdicts.append(self._tripped_verdict(guard, ctx))
+            else:
+                verdicts.append(self._run_one(guard, ctx))
         return self._aggregate(direction, ctx, verdicts)
+
+    def tripped_guards(self) -> list[str]:
+        """Guard ids whose circuit breaker has tripped (check() suspended, fail_mode enforced)."""
+        return sorted(self._tripped)
 
     def _run_one(self, guard: Guard, ctx: GuardContext) -> GuardVerdict:
         start = time.perf_counter()
@@ -91,26 +100,48 @@ class GuardPipeline:
             logger.error("guard %s errored: %s (streak %d)", guard.guard_id, exc, streak)
             if streak >= CIRCUIT_TRIP_THRESHOLD:
                 self._tripped.add(guard.guard_id)
-                logger.error("guard %s circuit tripped — disabled (monitor)", guard.guard_id)
-
-            fail_closed = guard.fail_mode == "closed"
-            return GuardVerdict(
-                guard_id=guard.guard_id,
-                owasp_id=guard.owasp_id,
-                direction=ctx.direction,
-                decision=GuardDecision.BLOCK if fail_closed else GuardDecision.PASS,
-                score=1.0 if fail_closed else 0.0,
-                reasons=[
-                    f"guard error ({'fail-closed' if fail_closed else 'fail-open'}): {type(exc).__name__}"
-                ],
-                detail={"error": str(exc)},
-                latency_ms=(time.perf_counter() - start) * 1000,
+                logger.error(
+                    "guard %s circuit tripped — check() suspended; fail_mode still enforced",
+                    guard.guard_id,
+                )
+            return self._failure_verdict(
+                guard, ctx, start, f"guard error: {type(exc).__name__}", detail={"error": str(exc)}
             )
+
+    def _tripped_verdict(self, guard: Guard, ctx: GuardContext) -> GuardVerdict:
+        """Verdict for a guard whose breaker has tripped — fail_mode is still enforced."""
+        return self._failure_verdict(
+            guard, ctx, time.perf_counter(), "circuit tripped", detail={"tripped": True}
+        )
+
+    def _failure_verdict(
+        self,
+        guard: Guard,
+        ctx: GuardContext,
+        start: float,
+        reason: str,
+        detail: dict | None = None,
+    ) -> GuardVerdict:
+        """Build a fail_mode-driven verdict (closed -> BLOCK, open -> PASS)."""
+        fail_closed = guard.fail_mode == "closed"
+        return GuardVerdict(
+            guard_id=guard.guard_id,
+            owasp_id=guard.owasp_id,
+            direction=ctx.direction,
+            decision=GuardDecision.BLOCK if fail_closed else GuardDecision.PASS,
+            score=1.0 if fail_closed else 0.0,
+            reasons=[f"{reason} ({'fail-closed' if fail_closed else 'fail-open'})"],
+            detail=detail or {},
+            latency_ms=(time.perf_counter() - start) * 1000,
+        )
 
     def _aggregate(
         self, direction: Direction, ctx: GuardContext, verdicts: list[GuardVerdict]
     ) -> GatewayDecision:
         if not verdicts:
+            # Reached only when no guards are registered for this direction. Tripped
+            # guards still emit a fail_mode verdict (see run/_tripped_verdict), so a
+            # fail-closed guard can never silently fall through to this PASS.
             return GatewayDecision(
                 request_id=ctx.request_id,
                 direction=direction,

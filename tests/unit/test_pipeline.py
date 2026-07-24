@@ -122,10 +122,32 @@ def test_circuit_breaker_trips_after_threshold():
     for _ in range(CIRCUIT_TRIP_THRESHOLD):
         p.run(Direction.INBOUND, _ctx(Direction.INBOUND))
     assert guard.guard_id in p._tripped
-    # once tripped, the guard is skipped -> no verdicts, pass
+    assert p.tripped_guards() == [guard.guard_id]
+
+
+def test_tripped_fail_closed_guard_keeps_blocking():
+    # A fail-closed guard whose breaker tripped must NOT silently open the gate:
+    # check() is suspended, but fail_mode is still enforced -> it keeps BLOCKing.
+    guard = _ErrorGuard("closed")
+    p = _pipeline_with(Direction.INBOUND, guard)
+    for _ in range(CIRCUIT_TRIP_THRESHOLD):
+        p.run(Direction.INBOUND, _ctx(Direction.INBOUND))
     d = p.run(Direction.INBOUND, _ctx(Direction.INBOUND))
-    assert d.verdicts == []
+    assert d.final_decision == GuardDecision.BLOCK
+    assert len(d.verdicts) == 1
+    assert "circuit tripped" in d.verdicts[0].reasons[0]
+    assert "fail-closed" in d.verdicts[0].reasons[0]
+
+
+def test_tripped_fail_open_guard_passes():
+    # A fail-open guard that trips still passes -- no regression.
+    guard = _ErrorGuard("open")
+    p = _pipeline_with(Direction.INBOUND, guard)
+    for _ in range(CIRCUIT_TRIP_THRESHOLD):
+        p.run(Direction.INBOUND, _ctx(Direction.INBOUND))
+    d = p.run(Direction.INBOUND, _ctx(Direction.INBOUND))
     assert d.final_decision == GuardDecision.PASS
+    assert "fail-open" in d.verdicts[0].reasons[0]
 
 
 def test_real_guards_built_by_direction():
