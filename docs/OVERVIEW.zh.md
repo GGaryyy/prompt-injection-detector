@@ -100,7 +100,7 @@ Python 3.10+、FastAPI/Uvicorn、sentence-transformers(nomic-embed-text-v1.5)、
 
 ## 測試
 
-219 個測試函式,分佈於各層。Unit 與 integration 涵蓋 schema、loader、規則引擎、各 guard、pipeline 以及 gateway 彙整邏輯;security 層跑 Bandit / detect-secrets / pip-audit。完整的 ML 測試在 Docker 內執行(偵測器與 embedder 需要模型權重);純邏輯子集則在不含重量級 ML 相依的隔離 venv 執行。
+222 個測試函式,分佈於各層:187 unit、18 integration、3 stress、3 security(security 層會外呼 Bandit / detect-secrets / pip-audit,單獨執行;其餘 219 個一次跑完)。Unit 與 integration 涵蓋 schema、loader、規則引擎、各 guard、pipeline 以及 gateway 彙整邏輯;security 層跑 Bandit / detect-secrets / pip-audit。完整的 ML 測試在 Docker 內執行(偵測器與 embedder 需要模型權重);純邏輯子集則在不含重量級 ML 相依的隔離 venv 執行。
 
 ## 已知限制
 
@@ -123,6 +123,20 @@ docker compose up api                                       # 在 :8000 提供 /
 ```
 
 Gateway 以自己的服務執行(預設 port 33707、`block` 模式、fail-closed),轉發給設定的 `upstream_url`;所有設定都在 `config.yaml`,可用 `GUARD_*` 環境變數覆寫。
+
+### 不使用 Docker
+
+Docker 是官方支援的路徑,但整套工具鏈也能在本機 virtualenv 跑 —— 在 Docker Desktop 沒開 WSL integration 的環境很有用。2026-07-28 的 OOD benchmark 就是這樣跑出來的。
+
+```bash
+python -m venv .venv-dev
+.venv-dev/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch  # CPU 版,避免拉 CUDA
+.venv-dev/bin/pip install -e ".[dev]"
+.venv-dev/bin/python scripts/eval_ood.py --in-dist --sources deepset_pi alpaca_negative
+.venv-dev/bin/python -m pytest tests/ --ignore=tests/security
+```
+
+兩個注意事項:若資料集當初是透過 Docker 下載,`data/raw/` 可能屬於 root —— 改傳不同的 `cache_dir` 比跟權限硬碰硬容易。另外 security 層會外呼 Bandit / detect-secrets / pip-audit,那些要另外安裝。
 
 ## 設計理由
 

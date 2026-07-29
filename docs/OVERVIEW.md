@@ -147,7 +147,9 @@ Security tooling in CI-style checks: Bandit (SAST), detect-secrets, pip-audit.
 
 ## Testing
 
-189 test functions across the tiers: 165 unit, 18 integration, 3 stress, 3 security. Unit
+222 test functions across the tiers: 187 unit, 18 integration, 3 stress, 3 security (the
+security tier shells out to Bandit / detect-secrets / pip-audit and is run separately;
+the other 219 run in one pass). Unit
 and integration cover the schema, loaders, rule engine, each guard, the pipeline, and the
 gateway aggregation logic; the security tier runs Bandit / detect-secrets / pip-audit. The
 full ML-backed suite runs in Docker (the detector and embedder need the model weights);
@@ -180,6 +182,25 @@ docker compose run --rm app python scripts/train.py         # train + benchmark
 docker compose run --rm app pytest                          # full suite
 docker compose up api                                       # serve /detect on :8000
 ```
+
+### Without Docker
+
+Docker is the supported path, but the whole toolchain also runs in a local virtualenv —
+useful on WSL setups where Docker Desktop's WSL integration is off. The OOD benchmark of
+2026-07-28 was produced this way.
+
+```bash
+python -m venv .venv-dev
+.venv-dev/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch  # CPU wheel, avoids the CUDA download
+.venv-dev/bin/pip install -e ".[dev]"
+.venv-dev/bin/python scripts/eval_ood.py --in-dist --sources deepset_pi alpaca_negative
+.venv-dev/bin/python -m pytest tests/ --ignore=tests/security
+```
+
+Two caveats. `data/raw/` may be owned by root if the datasets were first fetched through
+Docker — pass a different `cache_dir` rather than fighting the permissions. And the
+security tier shells out to Bandit / detect-secrets / pip-audit, so those need installing
+separately.
 
 The gateway runs as its own service (default port 33707, `block` mode, fail-closed) and
 forwards to the configured `upstream_url`; all settings are in `config.yaml` and can be
