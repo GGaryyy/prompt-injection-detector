@@ -138,6 +138,8 @@ python -m venv .venv-dev
 
 兩個注意事項:若資料集當初是透過 Docker 下載,`data/raw/` 可能屬於 root —— 改傳不同的 `cache_dir` 比跟權限硬碰硬容易。另外 security 層會外呼 Bandit / detect-secrets / pip-audit,那些要另外安裝。
 
+在 WSL 上,即使 Docker Desktop 的整合已啟用,`docker` 仍可能回 `Input/output error` —— 那是 ISO 掛載過期,不是設定錯誤。診斷與 `docker.exe` 的繞法見 `docs/issues/ISSUE_002.md`。
+
 ## 設計理由
 
 - **離線優先。** 一個要打電話給第三方 API 判斷安全性的 guard,等於新增一個相依與一條資料外流路徑。偵測在本地執行,所以工具可以擋在敏感服務前而不擴大信任邊界。

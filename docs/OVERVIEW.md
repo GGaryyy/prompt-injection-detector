@@ -202,6 +202,10 @@ Docker — pass a different `cache_dir` rather than fighting the permissions. An
 security tier shells out to Bandit / detect-secrets / pip-audit, so those need installing
 separately.
 
+On WSL, `docker` itself may fail with `Input/output error` even when the integration is
+enabled — a stale ISO mount, not a misconfiguration. See `docs/issues/ISSUE_002.md` for the
+diagnosis and the `docker.exe` workaround.
+
 The gateway runs as its own service (default port 33707, `block` mode, fail-closed) and
 forwards to the configured `upstream_url`; all settings are in `config.yaml` and can be
 overridden by `GUARD_*` environment variables.

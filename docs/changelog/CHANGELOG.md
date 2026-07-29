@@ -12,6 +12,10 @@ gateway covering the runtime-defensible OWASP LLM Top 10 (2025) categories.
 See `docs/plans/plan_llm_guard_gateway.md` (meta-repo) and `docs/owasp_coverage.md`.
 
 ### Added
+- `docs/issues/ISSUE_002.md` — `/usr/bin/docker` returning `Input/output error` in WSL after
+  the Docker Desktop integration is enabled. Stale iso9660 mount of `cli-tools`, not a
+  configuration problem; the daemon is healthy and only the WSL-side CLI is broken.
+  Worked around with a `docker.exe` alias, with the path-translation caveat recorded
 - `scripts/eval_ood.py` — out-of-distribution benchmark against held-out sources.
   Scores the frozen artifacts with no refit, no threshold change, and weights imported
   from `src.detector` so they cannot drift from what ships. Reports per-layer scores,
