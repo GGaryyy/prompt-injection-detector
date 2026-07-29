@@ -5,7 +5,11 @@ Supported sources (call `load_<name>()` directly, or `load_all()` for everything
 - AdvBench harmful_behaviors.csv           (positive: harmful prompts)
 - JailbreakBench/JBB-Behaviors             (positive: jailbreak)
 - databricks/databricks-dolly-15k          (negative: normal instructions)
-- (optional) allenai/wildjailbreak         (positive: in-the-wild jailbreaks)
+
+Held-out sources (NEVER enter training — see HOLDOUT_LOADERS):
+- allenai/wildjailbreak                    (positive: in-the-wild jailbreaks)
+- deepset/prompt-injections                (positive: PI, different distribution)
+- tatsu-lab/alpaca                         (negative: OOD benign)
 
 Each loader is robust to "directory missing" — returns empty list rather than raising.
 Run `bash scripts/download_data.sh` first to populate `data/raw/`.
@@ -24,6 +28,20 @@ logger = logging.getLogger(__name__)
 
 DATA_RAW = Path("data/raw")
 
+# Pinned dataset revisions, resolved 2026-07-28/29. An unpinned dataset can change
+# underneath us, which breaks two things at once: the training corpus stops matching the
+# shipped model artifact, and benchmark numbers stop being reproducible.
+#
+# Training revisions were verified to reproduce data/processed/dataset_v1.jsonl exactly
+# before being pinned, so the existing model artifact remains valid.
+# allenai/wildjailbreak is gated behind an HF login and could not be resolved; it stays
+# unpinned and unused until someone authenticates.
+LAKERA_REVISION = "04737b65e90a6794ec227012e4a255a7def6344b"
+JBB_REVISION = "886acc352a31533ffbcf4ef22c744658688086fc"
+DOLLY_REVISION = "bdd27f4d94b9c1f951818a7da7fd7aeea5dbff1a"
+DEEPSET_PI_REVISION = "4f61ecb038e9c3fb77e21034b22511b523772cdd"
+ALPACA_REVISION = "dce01c9b08f87459cf36a430d809084718273017"
+
 
 # === Individual source loaders ===
 
@@ -37,7 +55,9 @@ def load_lakera(cache_dir: Path = DATA_RAW / "lakera") -> list[TrainingSample]:
         from datasets import load_dataset
 
         ds = load_dataset(
-            "Lakera/gandalf_ignore_instructions", cache_dir=str(cache_dir)
+            "Lakera/gandalf_ignore_instructions",
+            revision=LAKERA_REVISION,
+            cache_dir=str(cache_dir),
         )
     except Exception as exc:
         logger.error(f"Failed to load Lakera: {exc}")
@@ -101,7 +121,10 @@ def load_jbb(cache_dir: Path = DATA_RAW / "jbb") -> list[TrainingSample]:
         from datasets import load_dataset
 
         ds = load_dataset(
-            "JailbreakBench/JBB-Behaviors", "behaviors", cache_dir=str(cache_dir)
+            "JailbreakBench/JBB-Behaviors",
+            "behaviors",
+            revision=JBB_REVISION,
+            cache_dir=str(cache_dir),
         )
     except Exception as exc:
         logger.error(f"Failed to load JBB: {exc}")
@@ -138,7 +161,9 @@ def load_dolly_negative(
         from datasets import load_dataset
 
         ds = load_dataset(
-            "databricks/databricks-dolly-15k", cache_dir=str(cache_dir)
+            "databricks/databricks-dolly-15k",
+            revision=DOLLY_REVISION,
+            cache_dir=str(cache_dir),
         )
     except Exception as exc:
         logger.error(f"Failed to load Dolly: {exc}")
@@ -170,7 +195,12 @@ def load_dolly_negative(
 def load_wildjailbreak(
     cache_dir: Path = DATA_RAW / "wildjailbreak",
 ) -> list[TrainingSample]:
-    """WildJailbreak (AI2 2024) — optional, may require HF login."""
+    """WildJailbreak (AI2 2024) — HOLDOUT ONLY, may require HF login.
+
+    Registered in HOLDOUT_LOADERS, never in SOURCE_LOADERS. If this ever enters
+    the training set the OOD benchmark is silently invalidated, because the
+    similarity layer would then be comparing held-out attacks against themselves.
+    """
     if not cache_dir.exists():
         logger.info(f"WildJailbreak cache not found at {cache_dir}; skipping (optional)")
         return []
@@ -324,21 +354,122 @@ def load_gandalf_handcrafted() -> list[TrainingSample]:
     return samples
 
 
+# === Held-out loaders (OOD benchmark only) ===
+
+
+def load_deepset_pi(
+    cache_dir: Path = DATA_RAW / "deepset_pi",
+) -> list[TrainingSample]:
+    """deepset/prompt-injections — HOLDOUT ONLY. Mixed EN/DE, human-written.
+
+    Revision-pinned: a benchmark whose held-out data can change underneath it is
+    not reproducible, and docs/reports/ood_benchmark_2026-07-28.md claims it is.
+    """
+    if not cache_dir.exists():
+        logger.warning(f"deepset cache not found at {cache_dir}; skipping")
+        return []
+    try:
+        from datasets import load_dataset
+
+        ds = load_dataset(
+            "deepset/prompt-injections",
+            revision=DEEPSET_PI_REVISION,
+            cache_dir=str(cache_dir),
+        )
+    except Exception as exc:
+        logger.error(f"Failed to load deepset/prompt-injections: {exc}")
+        return []
+
+    samples: list[TrainingSample] = []
+    for split_name, split in ds.items():
+        for i, row in enumerate(split):
+            text = row.get("text")
+            label = row.get("label")
+            if not text or label is None:
+                continue
+            samples.append(
+                TrainingSample(
+                    id=f"deepset_{split_name}_{i:05d}",
+                    prompt=str(text),
+                    label=1 if int(label) == 1 else 0,
+                    source="deepset_prompt_injections",
+                    attack_family="other" if int(label) == 1 else None,
+                    language="en",
+                )
+            )
+    logger.info(f"deepset/prompt-injections: {len(samples)} samples")
+    return samples
+
+
+def load_alpaca_negative(
+    cache_dir: Path = DATA_RAW / "alpaca", limit: int = 3000
+) -> list[TrainingSample]:
+    """tatsu-lab/alpaca as OOD negatives — HOLDOUT ONLY.
+
+    Benign holdout must not reuse Dolly: Dolly supplies 5,000 of the 6,732
+    training samples, so scoring OOD precision against it would measure nothing.
+    """
+    if not cache_dir.exists():
+        logger.warning(f"Alpaca cache not found at {cache_dir}; skipping")
+        return []
+    try:
+        from datasets import load_dataset
+
+        ds = load_dataset(
+            "tatsu-lab/alpaca",
+            revision=ALPACA_REVISION,
+            cache_dir=str(cache_dir),
+        )
+    except Exception as exc:
+        logger.error(f"Failed to load Alpaca: {exc}")
+        return []
+
+    samples: list[TrainingSample] = []
+    for split_name, split in ds.items():
+        for i, row in enumerate(split):
+            text = row.get("instruction")
+            if not text:
+                continue
+            samples.append(
+                TrainingSample(
+                    id=f"alpaca_{split_name}_{i:05d}",
+                    prompt=str(text),
+                    label=0,
+                    source="tatsu_lab_alpaca",
+                    language="en",
+                )
+            )
+            if len(samples) >= limit:
+                break
+        if len(samples) >= limit:
+            break
+    logger.info(f"Alpaca (negative): {len(samples)} samples (capped at {limit})")
+    return samples
+
+
 # === Convenience: load everything available ===
 
-
+# Training sources. Adding a held-out source here silently invalidates the OOD
+# benchmark — the similarity layer would compare held-out attacks against
+# themselves. See docs/plans/plan_pid_ood_benchmark.md.
 SOURCE_LOADERS: dict[str, Callable[[], list[TrainingSample]]] = {
     "lakera": load_lakera,
     "advbench": load_advbench,
     "jbb": load_jbb,
     "dolly_negative": load_dolly_negative,
-    "wildjailbreak": load_wildjailbreak,
     "gandalf_handcrafted": load_gandalf_handcrafted,
+}
+
+# Held-out sources. Never loaded by load_all(); used only by scripts/eval_ood.py.
+HOLDOUT_LOADERS: dict[str, Callable[[], list[TrainingSample]]] = {
+    "wildjailbreak": load_wildjailbreak,
+    "deepset_pi": load_deepset_pi,
+    "alpaca_negative": load_alpaca_negative,
 }
 
 
 def load_all() -> list[TrainingSample]:
-    """Load every source available; missing sources are skipped gracefully."""
+    """Load every training source available; missing sources are skipped gracefully."""
     all_samples: list[TrainingSample] = []
     for name, loader in SOURCE_LOADERS.items():
         try:
@@ -347,3 +478,25 @@ def load_all() -> list[TrainingSample]:
             logger.error(f"Loader {name} crashed: {exc}")
     logger.info(f"TOTAL loaded: {len(all_samples)} samples")
     return all_samples
+
+
+def load_holdout(names: list[str] | None = None) -> dict[str, list[TrainingSample]]:
+    """Load held-out sources, keyed by loader name.
+
+    Unlike load_all(), a missing or failing source is NOT skipped silently — it
+    returns an empty list and the caller is expected to treat that as an error.
+    Reporting OOD metrics computed over whatever happened to download would be
+    the same class of mistake this benchmark exists to correct.
+    """
+    selected = names or list(HOLDOUT_LOADERS)
+    out: dict[str, list[TrainingSample]] = {}
+    for name in selected:
+        loader = HOLDOUT_LOADERS.get(name)
+        if loader is None:
+            raise KeyError(f"Unknown holdout source: {name}")
+        try:
+            out[name] = loader()
+        except Exception as exc:
+            logger.error(f"Holdout loader {name} crashed: {exc}")
+            out[name] = []
+    return out

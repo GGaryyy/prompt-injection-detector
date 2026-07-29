@@ -105,6 +105,8 @@ coverage would be misrepresenting what a request/response inspector can actually
 
 ## Detector performance (v0.1.0 benchmark)
 
+**Classifier layer only**, on the in-distribution test split:
+
 | Metric | Value | MVP target |
 |--------|-------|-----------|
 | Accuracy | 0.9844 | — |
@@ -113,9 +115,14 @@ coverage would be misrepresenting what a request/response inspector can actually
 | F1 | 0.9699 | ≥ 0.80 |
 | AUC | 0.9989 | ≥ 0.90 |
 
-Train/test split 5385 / 1347. These numbers describe in-distribution performance on the
-consolidated corpus; they are not a claim about novel or adversarial-suffix attacks (see
-out-of-scope notes).
+Train/test split 5385 / 1347. `scripts/train.py` scores the classifier's predictions, not
+the three-layer ensemble the service actually runs — the two are not interchangeable. The
+full ensemble on the same split scores F1 0.9723 (`scripts/eval_ood.py --in-dist`).
+
+These are in-distribution figures on the consolidated corpus. For what happens on data the
+model has not seen, see limitation 1 below and
+`docs/reports/ood_benchmark_2026-07-28.md` — the short version is that recall falls to
+0.198 at the shipped threshold.
 
 ## Datasets & training
 
@@ -125,6 +132,12 @@ Gandalf attack prompts validated by the author. The 12 hand-crafted samples are 
 `author_validated=True` and cover 12 attack families observed first-hand on Lakera Gandalf
 levels 1–7. All training data derives from public corpora; no private or production data
 is used.
+
+Three further public sources are registered as **held out** and never enter training
+(`HOLDOUT_LOADERS` in `src/data_loader.py`): deepset/prompt-injections, tatsu-lab/alpaca,
+and allenai/wildjailbreak. They exist so `scripts/eval_ood.py` can measure generalisation
+against data the model has not seen. The benign holdout deliberately does not reuse Dolly,
+which supplies 5,000 of the 6,732 training samples.
 
 ## Tech stack
 
@@ -142,7 +155,13 @@ the pure-logic subset runs in an isolated venv without the heavy ML dependencies
 
 ## Known limitations
 
-1. Zero-shot weakness on attack families absent from the training set.
+1. **Measured out-of-distribution weakness.** On held-out attacks the detector recovers
+   0.198 recall at the shipped 0.50 threshold, against 0.960 in-distribution; false
+   positives on unseen benign text rise from 0.5% to 3.8%. AUC stays at 0.838, so the
+   ranking survives and most of the loss is threshold calibration rather than blindness.
+   The similarity layer separates unseen attacks from unseen benign text by 0.054 and does
+   not earn its 20% ensemble weight. Full numbers, caveats, and the single-source
+   limitation: `docs/reports/ood_benchmark_2026-07-28.md`.
 2. English-validated only; the embedder is multilingual but unvalidated for injection in
    other languages.
 3. No IPI defense (out of scope, see above).

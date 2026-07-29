@@ -61,8 +61,28 @@ ds = load_dataset('databricks/databricks-dolly-15k', cache_dir='data/raw/dolly')
 print(f'    samples: {sum(len(s) for s in ds.values())}')
 "
 
-# 5) (Optional) WildJailbreak — gated, may need huggingface-cli login
-run_step "allenai/wildjailbreak (optional, may require HF login)" python -c "
+echo ""
+echo "-----------------------------------------------------------"
+echo "HELD-OUT sources (OOD benchmark only — never enter training)"
+echo "-----------------------------------------------------------"
+
+# H1) deepset/prompt-injections — public, human-written, different distribution
+run_step "deepset/prompt-injections (holdout)" python -c "
+from datasets import load_dataset
+ds = load_dataset('deepset/prompt-injections', cache_dir='data/raw/deepset_pi')
+print(f'    samples: {sum(len(s) for s in ds.values())}')
+"
+
+# H2) Alpaca — OOD negatives. Must not reuse Dolly: Dolly is 5,000 of the 6,732
+#     training samples, so OOD precision measured against it would mean nothing.
+run_step "tatsu-lab/alpaca (holdout negative)" python -c "
+from datasets import load_dataset
+ds = load_dataset('tatsu-lab/alpaca', cache_dir='data/raw/alpaca')
+print(f'    samples: {sum(len(s) for s in ds.values())}')
+"
+
+# H3) WildJailbreak — gated, may need huggingface-cli login
+run_step "allenai/wildjailbreak (holdout, may require HF login)" python -c "
 from datasets import load_dataset
 ds = load_dataset('allenai/wildjailbreak', 'train', cache_dir='data/raw/wildjailbreak')
 print(f'    samples: {sum(len(s) for s in ds.values())}')
@@ -73,5 +93,6 @@ echo "==========================================================="
 echo "Download summary: $ok ok / $fail failed"
 echo "Datasets cached in data/raw/"
 echo ""
-echo "Next: docker compose run --rm app python scripts/build_dataset.py"
+echo "Next: python scripts/build_dataset.py     (training set)"
+echo "      python scripts/eval_ood.py          (OOD benchmark)"
 echo "==========================================================="

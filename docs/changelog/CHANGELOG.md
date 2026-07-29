@@ -11,7 +11,49 @@ Upgrade from a single `/detect` API (LLM01 only) to an offline reverse-proxy
 gateway covering the runtime-defensible OWASP LLM Top 10 (2025) categories.
 See `docs/plans/plan_llm_guard_gateway.md` (meta-repo) and `docs/owasp_coverage.md`.
 
+### Added
+- `scripts/eval_ood.py` — out-of-distribution benchmark against held-out sources.
+  Scores the frozen artifacts with no refit, no threshold change, and weights imported
+  from `src.detector` so they cannot drift from what ships. Reports per-layer scores,
+  not just an F1 delta: the similarity layer matches against the training positives
+  themselves, so its contribution to genuinely unseen attacks collapses by construction,
+  and an aggregate number would hide that
+- `scripts/paraphrase_probe.py` — deterministic, offline paraphrase robustness probe.
+  Separates "learned the attack" from "memorised its surface form", which is a different
+  failure mode from OOD. Documents in-module that it is a lower bound, since rule-based
+  rewriting stays lexically closer than real paraphrase would
+- `src/data_loader.py` — `HOLDOUT_LOADERS` registry plus `load_deepset_pi()` and
+  `load_alpaca_negative()`. Benign holdout deliberately does not reuse Dolly: Dolly is
+  5,000 of the 6,732 training samples, so OOD precision measured against it would be
+  meaningless
+- `scripts/download_data.sh` — held-out source downloads, in a section marked as such
+- `docs/reports/ood_benchmark_2026-07-28.md` — measured results. Headline: recall on unseen
+  attacks falls 0.960 → 0.198 at the shipped threshold, but AUC holds at 0.838, so most of
+  the loss is threshold calibration rather than blindness
+
 ### Changed
+- `src/data_loader.py` — `wildjailbreak` moved out of `SOURCE_LOADERS` into
+  `HOLDOUT_LOADERS`. Its loader already existed and the data had never been fetched, so
+  it was one `build_dataset.py` run away from silently entering training and invalidating
+  the OOD benchmark
+- `src/data_loader.py` — new `load_holdout()` does **not** skip failing sources the way
+  `load_all()` does; `eval_ood.py` aborts rather than reporting metrics over whatever
+  happened to download
+- `src/data_loader.py` — every HuggingFace dataset pinned to a fixed revision. An unpinned
+  dataset breaks two things at once: the training corpus stops matching the shipped model
+  artifact, and benchmark numbers stop being reproducible. The training pins were verified
+  safe first — downloaded to a scratch cache, they rebuild `dataset_v1.jsonl` to an
+  identical digest over all 6,732 samples, so the existing artifact stays valid.
+  `allenai/wildjailbreak` is still unpinned; its revision needs an HF login
+- `docs/OVERVIEW.md` — the v0.1.0 benchmark table is now labelled as **classifier-layer only**.
+  `train.py` scores the classifier's predictions, not the three-layer ensemble, and the two
+  had been used interchangeably. Ensemble on the same split is F1 0.9723
+- `docs/OVERVIEW.md` — limitation 1 replaced with measured figures instead of the previous
+  unfalsifiable "zero-shot weakness" sentence
+- `scripts/train.py` — per-family recall now suppressed below `MIN_FAMILY_N = 10`.
+  Most families had a single test sample, where recall is 0.0 or 1.0 and means neither;
+  `benchmark.json` was publishing "meta_conversation: recall 0.0" off one sample, which
+  reads as "cannot detect this family"
 - Public-release prep: renamed `TrainingSample.gary_personally_tested` → `author_validated`
   and `gary_test_context` → `validation_context` across `src/`, `scripts/`, and tests;
   set project attribution to Chuan Peng (LICENSE, `pyproject.toml`)
@@ -61,6 +103,12 @@ See `docs/plans/plan_llm_guard_gateway.md` (meta-repo) and `docs/owasp_coverage.
   per-guard `fail_mode` is the single source of truth). `src/config.py`, `config.yaml`.
 
 ### Security
+- Resolved 4 dependency CVEs found by pip-audit: `starlette` 1.2.1 → ≥1.3.1
+  (PYSEC-2026-248, PYSEC-2026-249) and `setuptools` 78.1.0 → ≥83.0.0 (PYSEC-2025-49,
+  PYSEC-2026-3447). Re-scan clean; suite re-run 219 passed. Note `torch` (CPU wheel from
+  the PyTorch index) cannot be resolved by pip-audit and is unscanned, not clean
+- Held-out dataset loads pinned to fixed revisions — an unpinned third-party dataset is
+  both a supply-chain exposure and a reproducibility hole (bandit B615)
 - bandit SAST clean (0/0/0) after annotating detection-pattern false positives (`# nosec B105`) and the intentional container bind (`# nosec B104`)
 - detect-secrets clean (private-key *pattern* allowlisted with `# pragma: allowlist secret`)
 - pip-audit ✅ pass on freshly rebuilt Docker image

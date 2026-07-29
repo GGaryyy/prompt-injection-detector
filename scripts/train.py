@@ -53,6 +53,9 @@ KNOWN_EMBEDDINGS_OUT = Path("data/embeddings/known_attacks.npy")
 ALL_EMBEDDINGS_CACHE = Path("data/embeddings/dataset_v1.npy")
 REPORT_OUT = Path("output/benchmark.json")
 
+# Minimum test samples before a per-family recall figure is meaningful enough to publish
+MIN_FAMILY_N = 10
+
 
 def load_dataset(path: Path) -> list[TrainingSample]:
     if not path.exists():
@@ -121,20 +124,27 @@ def main() -> None:
         "confusion_matrix": confusion_matrix(y_test, y_pred).tolist(),
     }
 
-    # Per-attack-family recall
+    # Per-attack-family recall.
+    # Families below MIN_FAMILY_N report no recall figure. Most families have a
+    # single test sample, where recall is either 0.0 or 1.0 and means neither —
+    # publishing "meta_conversation: recall 0.0" off one sample reads as "cannot
+    # detect this family" when it only says "n=1".
     test_samples = [samples[i] for i in idx_test]
     family_perf: dict[str, dict] = {}
     for fam in {s.attack_family for s in test_samples if s.attack_family}:
         mask = np.array([s.attack_family == fam for s in test_samples])
-        if mask.sum() == 0:
+        n = int(mask.sum())
+        if n == 0:
             continue
-        y_t = y_test[mask]
-        y_p = y_pred[mask]
+        if n < MIN_FAMILY_N:
+            family_perf[fam] = {"n": n, "recall": None, "note": "insufficient_sample"}
+            continue
         family_perf[fam] = {
-            "n": int(mask.sum()),
-            "recall": float(recall_score(y_t, y_p, zero_division=0)),
+            "n": n,
+            "recall": float(recall_score(y_test[mask], y_pred[mask], zero_division=0)),
         }
     metrics["per_attack_family_recall"] = family_perf
+    metrics["min_family_n"] = MIN_FAMILY_N
 
     # Save artifacts
     MODEL_OUT.parent.mkdir(parents=True, exist_ok=True)
