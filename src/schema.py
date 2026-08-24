@@ -57,7 +57,9 @@ class TrainingSample(BaseModel):
     subfamily: Optional[str] = Field(
         default=None, description="Optional finer-grained attack subfamily"
     )
-    language: str = Field(default="en", description="ISO 639-1 language code")
+    language: str = Field(
+        default="en", description='ISO 639-1 language code, or "unknown" if the source does not say'
+    )
     tested_against: list[str] = Field(
         default_factory=list,
         description="LLMs this attack was reported against (e.g. ['GPT-4', 'Claude-3'])",

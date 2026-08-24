@@ -394,7 +394,10 @@ def load_deepset_pi(
                     label=1 if int(label) == 1 else 0,
                     source="deepset_prompt_injections",
                     attack_family="other" if int(label) == 1 else None,
-                    language="en",
+                    # Mixed EN/DE with no language column. Asserting "en" would
+                    # silently file German prompts as English in any per-language
+                    # slice of the OOD results.
+                    language="unknown",
                 )
             )
     logger.info(f"deepset/prompt-injections: {len(samples)} samples")

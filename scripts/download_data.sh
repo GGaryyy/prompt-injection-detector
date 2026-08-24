@@ -4,6 +4,13 @@
 #
 # All sources used here are publicly downloadable WITHOUT HuggingFace login.
 # If a download fails, the script continues with what it can get.
+#
+# Revisions are imported from src/data_loader.py rather than repeated here. The
+# HF cache is keyed by revision, so a downloader that fetches `main` while the
+# loaders ask for a pinned commit populates the wrong snapshot: the download
+# reports success and the loaders then fail, or silently refetch, on any machine
+# that is offline. One source of truth avoids that split.
+# Exception: allenai/wildjailbreak is gated and not yet pinned (needs HF login).
 
 set -uo pipefail
 
@@ -35,7 +42,8 @@ run_step() {
 # 1) Lakera Gandalf-style PI (public, no auth)
 run_step "Lakera/gandalf_ignore_instructions" python -c "
 from datasets import load_dataset
-ds = load_dataset('Lakera/gandalf_ignore_instructions', cache_dir='data/raw/lakera')
+from src.data_loader import LAKERA_REVISION
+ds = load_dataset('Lakera/gandalf_ignore_instructions', revision=LAKERA_REVISION, cache_dir='data/raw/lakera')
 print(f'    samples: {sum(len(s) for s in ds.values())}')
 "
 
@@ -50,14 +58,16 @@ echo "    lines: $(wc -l < data/raw/advbench/harmful_behaviors.csv)"
 # 3) JailbreakBench (public)
 run_step "JailbreakBench/JBB-Behaviors" python -c "
 from datasets import load_dataset
-ds = load_dataset('JailbreakBench/JBB-Behaviors', 'behaviors', cache_dir='data/raw/jbb')
+from src.data_loader import JBB_REVISION
+ds = load_dataset('JailbreakBench/JBB-Behaviors', 'behaviors', revision=JBB_REVISION, cache_dir='data/raw/jbb')
 print(f'    samples: {sum(len(s) for s in ds.values())}')
 "
 
 # 4) Negative samples — Databricks Dolly 15k (public, high-quality, diverse instructions)
 run_step "databricks/databricks-dolly-15k (negative)" python -c "
 from datasets import load_dataset
-ds = load_dataset('databricks/databricks-dolly-15k', cache_dir='data/raw/dolly')
+from src.data_loader import DOLLY_REVISION
+ds = load_dataset('databricks/databricks-dolly-15k', revision=DOLLY_REVISION, cache_dir='data/raw/dolly')
 print(f'    samples: {sum(len(s) for s in ds.values())}')
 "
 
@@ -69,7 +79,8 @@ echo "-----------------------------------------------------------"
 # H1) deepset/prompt-injections — public, human-written, different distribution
 run_step "deepset/prompt-injections (holdout)" python -c "
 from datasets import load_dataset
-ds = load_dataset('deepset/prompt-injections', cache_dir='data/raw/deepset_pi')
+from src.data_loader import DEEPSET_PI_REVISION
+ds = load_dataset('deepset/prompt-injections', revision=DEEPSET_PI_REVISION, cache_dir='data/raw/deepset_pi')
 print(f'    samples: {sum(len(s) for s in ds.values())}')
 "
 
@@ -77,7 +88,8 @@ print(f'    samples: {sum(len(s) for s in ds.values())}')
 #     training samples, so OOD precision measured against it would mean nothing.
 run_step "tatsu-lab/alpaca (holdout negative)" python -c "
 from datasets import load_dataset
-ds = load_dataset('tatsu-lab/alpaca', cache_dir='data/raw/alpaca')
+from src.data_loader import ALPACA_REVISION
+ds = load_dataset('tatsu-lab/alpaca', revision=ALPACA_REVISION, cache_dir='data/raw/alpaca')
 print(f'    samples: {sum(len(s) for s in ds.values())}')
 "
 
