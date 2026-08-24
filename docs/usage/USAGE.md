@@ -75,13 +75,14 @@ These live under `/_guard` so they never collide with your upstream's routes.
 upstream_url: "http://host.docker.internal:8000"   # your AI service
 listen_port: 33707
 mode: "block"          # block | monitor | redact
-fail_mode: "closed"    # closed = guard error counts as BLOCK (no silent bypass)
 rate_limit:
   requests_per_minute: 120
   max_concurrent: 64
   max_input_chars: 20000
 guards:
   llm07_sysprompt:
+    fail_mode: "closed"  # per-guard, and the only place fail_mode is read:
+                         # closed = a guard error counts as BLOCK (no silent bypass)
     options:
       canary_tokens: ["CANARY-9f3a-DO-NOT-EMIT"]   # watch for these in responses
       system_prompt_fragments: ["The password is"] # block if echoed back

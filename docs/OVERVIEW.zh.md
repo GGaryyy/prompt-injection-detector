@@ -100,7 +100,7 @@ Python 3.10+、FastAPI/Uvicorn、sentence-transformers(nomic-embed-text-v1.5)、
 
 ## 測試
 
-222 個測試函式,分佈於各層:187 unit、18 integration、3 stress、3 security(security 層會外呼 Bandit / detect-secrets / pip-audit,單獨執行;其餘 219 個一次跑完)。Unit 與 integration 涵蓋 schema、loader、規則引擎、各 guard、pipeline 以及 gateway 彙整邏輯;security 層跑 Bandit / detect-secrets / pip-audit。完整的 ML 測試在 Docker 內執行(偵測器與 embedder 需要模型權重);純邏輯子集則在不含重量級 ML 相依的隔離 venv 執行。
+230 個測試函式,分佈於各層:206 unit、18 integration、3 stress、3 security(security 層會外呼 Bandit / detect-secrets / pip-audit,單獨執行;其餘 227 個一次跑完)。Unit 與 integration 涵蓋 schema、loader、規則引擎、各 guard、pipeline、gateway 彙整邏輯,以及評測時的 self-match 遮蔽;security 層跑 Bandit / detect-secrets / pip-audit。完整的 ML 測試在 Docker 內執行(偵測器與 embedder 需要模型權重);純邏輯子集則在不含重量級 ML 相依的隔離 venv 執行。
 
 ## 已知限制
 

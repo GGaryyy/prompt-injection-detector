@@ -12,6 +12,9 @@ gateway covering the runtime-defensible OWASP LLM Top 10 (2025) categories.
 See `docs/plans/plan_llm_guard_gateway.md` (meta-repo) and `docs/owasp_coverage.md`.
 
 ### Added
+- `src/eval_masking.py` — self-match masking for offline evaluation, with unit tests in
+  `tests/unit/test_eval_masking.py`. It was previously an inline loop inside one script,
+  which is why the second script scored its numbers without it
 - `docs/issues/ISSUE_002.md` — `/usr/bin/docker` returning `Input/output error` in WSL after
   the Docker Desktop integration is enabled. Stale iso9660 mount of `cli-tools`, not a
   configuration problem; the daemon is healthy and only the WSL-side CLI is broken.
@@ -89,6 +92,49 @@ See `docs/plans/plan_llm_guard_gateway.md` (meta-repo) and `docs/owasp_coverage.
 - `tests/stress/test_gateway_stress.py` — proxy throughput / concurrency / oversize-body stress tests
 
 ### Fixed
+- **Published paraphrase-probe numbers were inflated by self-match leakage.**
+  `scripts/paraphrase_probe.py` sampled its 200 prompts out of
+  `known_attacks.jsonl` and then scored them against that same corpus unmasked, so
+  every original matched itself at cosine 1.0 and its recall measured corpus
+  membership rather than detection. This is the identical leak already fixed in
+  `eval_ood.py`, which had not been carried across. Both arms now mask each
+  prompt's source attack — the paraphrase arm masks the *original* it was derived
+  from, so the delta isolates the rewrite. Corrected figures: original recall
+  0.9750 → **0.9650**, similarity 1.0000 → **0.8567**; Δrecall −0.045 → **−0.050**,
+  Δsimilarity −0.101 → **−0.060**. The similarity delta was the badly distorted
+  one: most of it had been the original arm falling off a self-match, not the
+  rewrite moving away from the corpus. `docs/reports/ood_benchmark_2026-07-28.md`
+  and `.zh.md` carry a dated revision note; the OOD results are unaffected
+- `scripts/download_data.sh` fetched unpinned revisions the loaders will not use.
+  `src/data_loader.py` pins five HuggingFace datasets, but the downloader called
+  `load_dataset()` without `revision=`. The HF cache is keyed by revision, so the
+  script populated the `main` snapshot, reported `5 ok / 0 failed`, and the pinned
+  loaders then returned `[]` on any offline machine — aborting `eval_ood.py` after
+  an apparently clean download. Revisions are now imported from `src/data_loader.py`
+  so there is one source of truth
+- Self-match masking was id-only while the corpus is never de-duplicated. A prompt
+  present under two ids (the sources overlap) still matched its twin at cosine 1.0.
+  Masking is now by id **and** normalised text. Re-running the in-distribution
+  control found no such twins among the 347 test positives, so no published number
+  changed — the check is insurance against a future corpus rebuild, not a
+  correction. Extracted to `src/eval_masking.py` and shared by both scripts
+- `score_samples()` accepted a half-specified mask (`known_ids` without `known_texts`),
+  scoring unmasked while `evaluate()` still recorded `self_match_masked: true` from the
+  caller's intent. It now raises on that call and the report flag is derived from the
+  masked count actually returned, which is also published as `n_self_masked`
+- Held-out sources are scored unmasked because they are assumed unseen — an assumption
+  about the data that nothing verified. `evaluate()` now measures it, reporting
+  `n_verbatim_in_corpus` per source. Measured: deepset_pi 0/662, alpaca_negative 0/3000,
+  so the OOD numbers carry no corpus-membership contamination
+- `scripts/eval_ood.py --in-dist` skipped the pre-flight check for
+  `dataset_v1.jsonl`, the one file that mode needs, so a missing dataset raised a
+  raw `FileNotFoundError` instead of "Run scripts/train.py first"
+- `deepset/prompt-injections` samples were all labelled `language="en"` although the
+  source is mixed EN/DE with no language column; now `"unknown"`, so a per-language
+  slice of the OOD results cannot silently file German prompts as English
+- `docs/usage/USAGE.md` still showed a gateway-level `fail_mode: "closed"` removed in
+  7d0c874. Pydantic ignores the extra key, so anyone copying the sample got no error
+  and no effect. Replaced with the per-guard `fail_mode`, which is the one that works
 - Circuit breaker no longer opens a fail-closed guard. A tripped guard's `check()`
   calls are suspended, but its `fail_mode` is still enforced on every request
   (fail-closed → keep BLOCKing, fail-open → PASS). Previously a guard that errored

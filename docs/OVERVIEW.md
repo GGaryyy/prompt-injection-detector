@@ -147,11 +147,12 @@ Security tooling in CI-style checks: Bandit (SAST), detect-secrets, pip-audit.
 
 ## Testing
 
-222 test functions across the tiers: 187 unit, 18 integration, 3 stress, 3 security (the
+230 test functions across the tiers: 206 unit, 18 integration, 3 stress, 3 security (the
 security tier shells out to Bandit / detect-secrets / pip-audit and is run separately;
-the other 219 run in one pass). Unit
-and integration cover the schema, loaders, rule engine, each guard, the pipeline, and the
-gateway aggregation logic; the security tier runs Bandit / detect-secrets / pip-audit. The
+the other 227 run in one pass). Unit
+and integration cover the schema, loaders, rule engine, each guard, the pipeline, the
+gateway aggregation logic, and the evaluation-time self-match masking; the security tier
+runs Bandit / detect-secrets / pip-audit. The
 full ML-backed suite runs in Docker (the detector and embedder need the model weights);
 the pure-logic subset runs in an isolated venv without the heavy ML dependencies.
 
