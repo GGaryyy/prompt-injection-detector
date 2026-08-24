@@ -1,7 +1,9 @@
 """Unit tests for the OOD benchmark and paraphrase probe (pure-logic parts only).
 
-The scoring paths need model weights and are covered by
-tests/integration/test_ood_pipeline.py instead.
+score_samples() and score() need model weights and are not exercised here. The
+similarity-masking logic they depend on was factored into src/eval_masking.py
+precisely so it could be tested without weights — see
+tests/unit/test_eval_masking.py.
 """
 
 from __future__ import annotations

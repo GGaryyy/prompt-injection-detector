@@ -20,6 +20,12 @@ WHAT THIS UNDERSTATES AND OVERSTATES — read before quoting any number:
 Treat the result as a lower bound on paraphrase degradation, not a measurement
 of it.
 
+Both arms mask each prompt's source attack out of the similarity layer
+(src/eval_masking.py). The sampled prompts come from the corpus that layer
+matches against, so unmasked every original scores sim 1.0 against itself and
+the "original" arm is a near-perfect score by construction rather than by
+detection.
+
 Run:
     python scripts/paraphrase_probe.py
 """
@@ -46,6 +52,7 @@ from src.detector import (  # noqa: E402
     W_SIM,
 )
 from src.embedder import Embedder  # noqa: E402
+from src.eval_masking import mask_self_matches  # noqa: E402
 from src.schema import TrainingSample  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -110,14 +117,33 @@ def load_jsonl(path: Path) -> list[TrainingSample]:
 
 def score(
     texts: list[str],
+    source_ids: list[str],
+    source_texts: list[str],
     embedder: Embedder,
     classifier: InjectionClassifier,
     known_embeddings: np.ndarray,
+    known_ids: list[str],
+    known_texts: list[str],
 ) -> dict[str, np.ndarray]:
+    """Score `texts`, excluding each one's source attack from the similarity layer.
+
+    Every prompt this probe scores is drawn from — or derived from — the same
+    corpus the similarity layer matches against, so without masking each
+    original matches itself at cosine 1.0 and the "original" arm is pinned near
+    perfect recall by construction. `source_ids` / `source_texts` name the
+    corpus entry each row came from; for a paraphrase, that is the ORIGINAL it
+    was rewritten from, so both arms are scored under the same rule and the
+    delta measures rewriting rather than two different regimes.
+    """
     rule = np.array([rule_engine.detect(t)[0] for t in texts], dtype=np.float32)
     vecs = embedder.encode(texts, batch_size=EMBED_BATCH, show_progress=True)
     cls = classifier.predict_proba(vecs).astype(np.float32)
-    sim = np.clip((vecs @ known_embeddings.T).max(axis=1), 0.0, None).astype(np.float32)
+
+    sims = vecs @ known_embeddings.T
+    masked = mask_self_matches(sims, source_ids, source_texts, known_ids, known_texts)
+    logger.info(f"Masked {masked}/{len(texts)} source attacks in similarity layer")
+
+    sim = np.clip(sims.max(axis=1), 0.0, None).astype(np.float32)
     ensemble = np.clip(W_RULE * rule + W_CLS * cls + W_SIM * sim, 0.0, 1.0)
     return {"rule": rule, "cls": cls, "sim": sim, "ensemble": ensemble}
 
@@ -144,6 +170,7 @@ def main() -> None:
     known = load_jsonl(KNOWN_ATTACKS_PATH)
     picked = rng.sample(known, min(SAMPLE_N, len(known)))
     originals = [s.prompt for s in picked]
+    source_ids = [s.id for s in picked]
     rewritten = [paraphrase(t, rng) for t in originals]
 
     changed = sum(1 for a, b in zip(originals, rewritten) if a != b)
@@ -152,11 +179,20 @@ def main() -> None:
     embedder = Embedder()
     classifier = InjectionClassifier.load(MODEL_PATH)
     known_embeddings = np.load(KNOWN_EMBEDDINGS_PATH)
+    if len(known) != known_embeddings.shape[0]:
+        raise ValueError(
+            f"Artifact mismatch: known_attacks={len(known)} "
+            f"known_embeddings={known_embeddings.shape[0]}. Retrain before probing."
+        )
+    known_ids = [s.id for s in known]
+    known_texts = [s.prompt for s in known]
 
+    # Both arms mask the same source attacks, so the delta isolates the rewrite.
+    common = (embedder, classifier, known_embeddings, known_ids, known_texts)
     logger.info("Scoring originals")
-    res_orig = score(originals, embedder, classifier, known_embeddings)
+    res_orig = score(originals, source_ids, originals, *common)
     logger.info("Scoring paraphrases")
-    res_para = score(rewritten, embedder, classifier, known_embeddings)
+    res_para = score(rewritten, source_ids, originals, *common)
 
     before = summarise(res_orig)
     after = summarise(res_para)
@@ -169,10 +205,17 @@ def main() -> None:
         "original": before,
         "paraphrased": after,
         "delta": {k: after[k] - before[k] for k in before},
+        "self_match_masked": True,
         "caveat": (
             "Rule-based rewriting stays lexically close to the source, so this is a "
             "lower bound on paraphrase degradation, not a measurement of it. "
             "See module docstring."
+        ),
+        "masking_note": (
+            "Both arms exclude each prompt's source attack from the similarity "
+            "layer. Unmasked, an original replayed verbatim scores sim 1.0 — that "
+            "is correct production behaviour (the corpus holds the attack) but it "
+            "measures corpus membership, not detection, and would inflate the delta."
         ),
     }
 

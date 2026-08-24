@@ -45,6 +45,7 @@ from src.detector import (  # noqa: E402
     W_SIM,
 )
 from src.embedder import Embedder  # noqa: E402
+from src.eval_masking import mask_self_matches, normalise  # noqa: E402
 from src.schema import TrainingSample  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -81,18 +82,23 @@ def score_samples(
     classifier: InjectionClassifier,
     known_embeddings: np.ndarray,
     known_ids: list[str] | None = None,
+    known_texts: list[str] | None = None,
 ) -> dict[str, np.ndarray]:
     """Vectorised equivalent of Detector.detect() over many samples.
 
     Returns per-layer scores so the collapse can be attributed to a layer
     rather than reported as one opaque F1 delta.
 
-    `known_ids` enables self-match masking. train.py writes EVERY positive to
-    known_attacks.jsonl, including the ones in its own test split, so scoring
-    the in-distribution split unmasked lets each attack match itself at cosine
-    1.0. That inflates the similarity layer to a perfect score and is pure
-    leakage — in production a fresh request is never already in the corpus.
-    Held-out sources need no masking; they share no ids with the corpus.
+    Passing `known_ids` + `known_texts` enables self-match masking. train.py
+    writes EVERY positive to known_attacks.jsonl, including the ones in its own
+    test split, so scoring the in-distribution split unmasked lets each attack
+    match itself at cosine 1.0. That inflates the similarity layer to a perfect
+    score and is pure leakage — in production a fresh request is never already
+    in the corpus. See src/eval_masking.py.
+
+    Held-out sources are scored unmasked, on the grounds that they are genuinely
+    unseen. evaluate() measures that assumption rather than trusting it and
+    reports `n_verbatim_in_corpus` per source.
     """
     texts = [s.prompt for s in samples]
 
@@ -104,15 +110,17 @@ def score_samples(
     # known_embeddings and vecs are both L2-normalised, so dot product = cosine.
     sims = vecs @ known_embeddings.T
 
-    if known_ids is not None:
-        col_of = {kid: j for j, kid in enumerate(known_ids)}
-        masked = 0
-        for i, s in enumerate(samples):
-            j = col_of.get(s.id)
-            if j is not None:
-                sims[i, j] = -np.inf
-                masked += 1
-        logger.info(f"Masked {masked}/{len(samples)} self-matches in similarity layer")
+    # Half-specifying the mask would score unmasked while the caller believes
+    # otherwise — the exact silent-inflation failure this masking exists to stop.
+    if (known_ids is None) != (known_texts is None):
+        raise ValueError("known_ids and known_texts must be given together")
+
+    n_masked = 0
+    if known_ids is not None and known_texts is not None:
+        n_masked = mask_self_matches(
+            sims, [s.id for s in samples], texts, known_ids, known_texts
+        )
+        logger.info(f"Masked {n_masked}/{len(samples)} self-matches in similarity layer")
 
     sim = np.clip(sims.max(axis=1), 0.0, None).astype(np.float32)
 
@@ -124,6 +132,7 @@ def score_samples(
         "sim": sim,
         "ensemble": ensemble,
         "label": np.array([s.label for s in samples], dtype=np.int8),
+        "n_self_masked": n_masked,
     }
 
 
@@ -179,7 +188,7 @@ def evaluate(
     name: str,
     samples: list[TrainingSample],
     ctx: dict,
-    mask_self_matches: bool = False,
+    mask_self: bool = False,
 ) -> tuple[dict, dict[str, np.ndarray]]:
     logger.info(f"[{name}] scoring {len(samples)} samples")
     res = score_samples(
@@ -187,14 +196,25 @@ def evaluate(
         ctx["embedder"],
         ctx["classifier"],
         ctx["known_embeddings"],
-        known_ids=ctx["known_ids"] if mask_self_matches else None,
+        known_ids=ctx["known_ids"] if mask_self else None,
+        known_texts=ctx["known_texts"] if mask_self else None,
     )
+    # Report what masking actually did, not what the caller asked for.
+    n_self_masked = res.pop("n_self_masked")
 
     report = {
         "n": len(samples),
         "n_positive": int((res["label"] == 1).sum()),
         "n_negative": int((res["label"] == 0).sum()),
-        "self_match_masked": mask_self_matches,
+        "self_match_masked": n_self_masked > 0,
+        "n_self_masked": n_self_masked,
+        # Held-out sources are scored unmasked on the grounds that they are genuinely
+        # unseen. That is an assumption about the data, so measure it rather than
+        # assert it: any prompt here that is verbatim in the training corpus scores
+        # its similarity on corpus membership, not on detection.
+        "n_verbatim_in_corpus": sum(
+            1 for s in samples if normalise(s.prompt) in ctx["known_normalised"]
+        ),
         "at_shipped_threshold": metrics_at(res["ensemble"], res["label"], INJECTION_THRESHOLD),
         "layer_profile": layer_profile(res),
         "threshold_sweep": [
@@ -230,7 +250,7 @@ def run_in_dist(ctx: dict) -> tuple[dict, dict[str, np.ndarray]]:
         idx, test_size=SPLIT_TEST_SIZE, random_state=SPLIT_SEED, stratify=labels
     )
     test_samples = [samples[i] for i in idx_test]
-    return evaluate("in_dist_test_split", test_samples, ctx, mask_self_matches=True)
+    return evaluate("in_dist_test_split", test_samples, ctx, mask_self=True)
 
 
 def main() -> None:
@@ -248,7 +268,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    for p in (MODEL_PATH, KNOWN_ATTACKS_PATH, KNOWN_EMBEDDINGS_PATH):
+    required = [MODEL_PATH, KNOWN_ATTACKS_PATH, KNOWN_EMBEDDINGS_PATH]
+    if args.in_dist:
+        # run_in_dist() re-splits the training corpus, so it needs the dataset too.
+        required.append(DATASET_PATH)
+    for p in required:
         if not p.exists():
             raise FileNotFoundError(f"Missing artifact: {p}. Run scripts/train.py first.")
 
@@ -265,6 +289,8 @@ def main() -> None:
         "classifier": InjectionClassifier.load(MODEL_PATH),
         "known_embeddings": known_embeddings,
         "known_ids": [s.id for s in known_attacks],
+        "known_texts": [s.prompt for s in known_attacks],
+        "known_normalised": {normalise(s.prompt) for s in known_attacks},
     }
     raw_scores: dict[str, np.ndarray] = {}
 

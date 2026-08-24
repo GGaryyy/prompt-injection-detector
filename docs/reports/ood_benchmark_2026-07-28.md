@@ -111,22 +111,42 @@ training positives were rewritten with deterministic, offline lexical substituti
 
 | | Recall | rule | classifier | similarity |
 |---|---|---|---|---|
-| Original | 0.9750 | 0.1600 | 0.9529 | 1.0000 |
-| Paraphrased | 0.9300 | 0.0270 | 0.8914 | 0.8992 |
-| Δ | −0.045 | **−0.133 (−83%)** | −0.062 | −0.101 |
+| Original | 0.9650 | 0.1600 | 0.9529 | 0.8567 |
+| Paraphrased | 0.9150 | 0.0270 | 0.8914 | 0.7971 |
+| Δ | −0.050 | **−0.133 (−83%)** | −0.062 | −0.060 |
+
+Both arms exclude each prompt's source attack from the similarity layer
+(`src/eval_masking.py`); 200/200 masked in each. Without that the `original` row scores
+similarity 1.0000 against itself and its recall is a property of corpus membership rather
+than of detection.
 
 The rule layer is all but erased by synonym substitution — expected, since several
 substitutions target the exact tokens `src/rule_engine.py` matches. The classifier barely
-moves. Overall recall drops 4.5 points.
+moves. Overall recall drops 5.0 points.
 
 **This is a lower bound, not a measurement.** Rule-based rewriting stays lexically close
 to the source, so embeddings move less than they would under real paraphrase or a human
-rewriting from scratch. The `original` row's similarity of 1.0000 is self-match — those
-prompts are in the corpus by construction. Both caveats are recorded in the script's
-module docstring so the numbers cannot be quoted without them.
+rewriting from scratch. That caveat is recorded in the script's module docstring so the
+numbers cannot be quoted without it.
+
+> **Revised 2026-07-29.** The figures above replace an earlier version of this table that
+> was computed unmasked (`Original` recall 0.9750, similarity 1.0000; Δ recall −0.045,
+> Δ similarity −0.101). The similarity delta in particular was an artifact: most of it was
+> the original arm falling from a self-match, not the paraphrase moving away from the
+> corpus. The masking bug was found by code review — it is the same leak already fixed in
+> `scripts/eval_ood.py`, which had not been carried across to the probe.
 
 Read together with the OOD results: the classifier generalises to *rewordings of attacks
 it knows* but not to *attacks from a different distribution*.
+
+## Holdout overlap with the training corpus
+
+Held-out sources are scored unmasked, which is only sound if they are genuinely unseen.
+Measured (2026-07-29, `n_verbatim_in_corpus` in `output/benchmark_ood.json`): **0 of 662**
+deepset prompts and **0 of 3000** Alpaca prompts appear verbatim in
+`known_attacks.jsonl` under normalised comparison. The OOD figures above therefore
+contain no corpus-membership contamination. This is now reported on every run rather
+than assumed.
 
 ## Correction to a published figure
 
