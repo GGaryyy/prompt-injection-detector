@@ -21,6 +21,41 @@ DEFAULT_MODEL = os.environ.get("PI_EMBED_MODEL", "nomic-ai/nomic-embed-text-v1.5
 FALLBACK_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 
+def _ensure_extended_attention_mask() -> None:
+    """Restore PreTrainedModel.get_extended_attention_mask, removed in transformers 5.
+
+    nomic-embed-text-v1.5 runs remote code (nomic-bert-2048) that still calls it, so on
+    transformers 5 encoding fails with AttributeError. Staying on transformers 4 is not an
+    option: pip-audit reports vulnerabilities there that are only fixed in 5.x.
+    This is the transformers 4.x encoder-path implementation; decoder (causal) models are
+    not supported because no model this project loads is one.
+    """
+    import torch
+    from transformers import PreTrainedModel
+
+    if hasattr(PreTrainedModel, "get_extended_attention_mask"):
+        return
+
+    def get_extended_attention_mask(self, attention_mask, input_shape, device=None, dtype=None):
+        if getattr(self.config, "is_decoder", False):
+            raise NotImplementedError("extended attention mask shim covers encoder models only")
+        if dtype is None:
+            dtype = self.dtype
+        if attention_mask.dim() == 3:
+            extended = attention_mask[:, None, :, :]
+        elif attention_mask.dim() == 2:
+            extended = attention_mask[:, None, None, :]
+        else:
+            raise ValueError(
+                f"Wrong shape for input_ids (shape {input_shape}) or attention_mask "
+                f"(shape {attention_mask.shape})"
+            )
+        extended = extended.to(dtype=dtype)
+        return (1.0 - extended) * torch.finfo(dtype).min
+
+    PreTrainedModel.get_extended_attention_mask = get_extended_attention_mask
+
+
 class Embedder:
     """Lazy-loading sentence-transformer wrapper with batch inference."""
 
@@ -39,6 +74,7 @@ class Embedder:
             return
         from sentence_transformers import SentenceTransformer
 
+        _ensure_extended_attention_mask()
         try:
             logger.info(f"Loading embedding model: {self.model_name}")
             self._model = SentenceTransformer(
@@ -53,7 +89,11 @@ class Embedder:
             self.model_name = FALLBACK_MODEL
             self._model = SentenceTransformer(self.model_name, device=self.device)
 
-        self._dim = self._model.get_sentence_embedding_dimension()
+        # Renamed to get_embedding_dimension in sentence-transformers 5.x; keep both working.
+        get_dim = getattr(self._model, "get_embedding_dimension", None) or (
+            self._model.get_sentence_embedding_dimension
+        )
+        self._dim = get_dim()
         logger.info(f"Embedder ready: model={self.model_name} dim={self._dim}")
 
     @property

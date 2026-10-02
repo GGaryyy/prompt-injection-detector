@@ -36,11 +36,11 @@ DATA_RAW = Path("data/raw")
 # before being pinned, so the existing model artifact remains valid.
 # allenai/wildjailbreak is gated behind an HF login and could not be resolved; it stays
 # unpinned and unused until someone authenticates.
-LAKERA_REVISION = "04737b65e90a6794ec227012e4a255a7def6344b"
-JBB_REVISION = "886acc352a31533ffbcf4ef22c744658688086fc"
-DOLLY_REVISION = "bdd27f4d94b9c1f951818a7da7fd7aeea5dbff1a"
-DEEPSET_PI_REVISION = "4f61ecb038e9c3fb77e21034b22511b523772cdd"
-ALPACA_REVISION = "dce01c9b08f87459cf36a430d809084718273017"
+LAKERA_REVISION = "04737b65e90a6794ec227012e4a255a7def6344b"  # pragma: allowlist secret
+JBB_REVISION = "886acc352a31533ffbcf4ef22c744658688086fc"  # pragma: allowlist secret
+DOLLY_REVISION = "bdd27f4d94b9c1f951818a7da7fd7aeea5dbff1a"  # pragma: allowlist secret
+DEEPSET_PI_REVISION = "4f61ecb038e9c3fb77e21034b22511b523772cdd"  # pragma: allowlist secret
+ALPACA_REVISION = "dce01c9b08f87459cf36a430d809084718273017"  # pragma: allowlist secret
 
 
 # === Individual source loaders ===

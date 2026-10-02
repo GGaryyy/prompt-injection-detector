@@ -67,6 +67,29 @@ See `docs/plans/plan_llm_guard_gateway.md` (meta-repo) and `docs/owasp_coverage.
 - `docs/OVERVIEW.md` added — canonical scope, architecture, and OWASP coverage reference;
   replaced two dangling links to the private meta-repo plan with in-repo references
 
+### Security
+- `pyproject.toml` — `transformers>=5.10`. pip-audit flags transformers 4.57.6 for
+  PYSEC-2025-217, PYSEC-2026-2288/2289/2290/3929/4174, fixed only in the 5.x line. The
+  dependency was unbounded before, so whichever 4.x a fresh build resolved shipped with them
+- `src/embedder.py` — `_ensure_extended_attention_mask()` restores
+  `PreTrainedModel.get_extended_attention_mask`, which transformers 5 removed and
+  nomic-embed-text-v1.5's remote code still calls. Encoder path only, ported from 4.x.
+  Embeddings for a fixed probe set are identical under 4.57.6 and 5.18 (max abs diff 0.0),
+  and a full retrain reproduces F1 0.9699 with the same confusion matrix. Covered by
+  `tests/unit/test_embedder.py`
+
+### Fixed
+- `scripts/train.py` crashed after saving artifacts when printing per-family recall:
+  families under `MIN_FAMILY_N` carry `recall: None`, which the format string could not take
+- `src/data_loader.py` — dataset revision SHAs marked `# pragma: allowlist secret`;
+  detect-secrets reported them as high-entropy secrets and failed the security suite
+- `src/embedder.py` — uses `get_embedding_dimension` when available (sentence-transformers
+  renamed it); falls back to the old name
+- `Dockerfile` — torch installed from the CPU wheel index first. On linux/arm64 the default
+  PyPI wheel pulls several GB of CUDA libraries no container here can use; image is now
+  ~2.9 GB. apt switched to HTTPS (plain-HTTP mirror traffic stalls inside Docker Desktop's
+  VM on macOS) and `build-essential` dropped, since every dependency ships a prebuilt wheel
+
 ### Added
 - `src/schema.py` — gateway schemas: `Direction`, `GuardDecision`, `GuardVerdict`, `GatewayDecision`, `AttackRecord`, `GapRecord`, `DECISION_SEVERITY`
 - `src/guards/base.py` — `Guard` ABC, `GuardContext`, guard registry (`register_guard` / `registry`)

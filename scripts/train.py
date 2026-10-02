@@ -181,7 +181,8 @@ def main() -> None:
     print()
     print("  Per attack family recall:")
     for fam, p in sorted(family_perf.items(), key=lambda kv: -kv[1]["n"]):
-        print(f"    {fam:40s}  n={p['n']:4d}  recall={p['recall']:.3f}")
+        recall = f"{p['recall']:.3f}" if p["recall"] is not None else f"n/a ({p['note']})"
+        print(f"    {fam:40s}  n={p['n']:4d}  recall={recall}")
     print("=" * 60)
     print(f"  Saved: model -> {MODEL_OUT}")
     print(f"  Saved: known attacks -> {KNOWN_ATTACKS_OUT}")
